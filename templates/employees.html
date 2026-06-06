@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card">
+    <h2>Employee Records</h2>
+
+    <p>This is a placeholder employee list. Database functionality will be added later.</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Site</th>
+                <th>Job Role</th>
+                <th>Start Date</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for employee in employees %}
+            <tr>
+                <td>{{ employee.id }}</td>
+                <td>{{ employee.name }}</td>
+                <td>{{ employee.site }}</td>
+                <td>{{ employee.job_role }}</td>
+                <td>{{ employee.start_date }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endblock %}
