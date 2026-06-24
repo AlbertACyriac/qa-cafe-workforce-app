@@ -43,9 +43,8 @@ jobs:
           python -m pytest -v
 
       - name: Run dependency security scan
-        continue-on-error: true
         run: |
-          pip-audit
+          pip-audit -r requirements.txt
 
       - name: Package application
         run: |
