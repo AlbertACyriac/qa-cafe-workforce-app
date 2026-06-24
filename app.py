@@ -1,4 +1,5 @@
 from datetime import date
+from functools import wraps
 
 from flask import (
     Flask,
@@ -6,9 +7,11 @@ from flask import (
     redirect,
     render_template,
     request,
+    session,
     url_for,
 )
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import check_password_hash, generate_password_hash
 
 
 app = Flask(__name__)
@@ -43,6 +46,46 @@ class Site(db.Model):
     def __repr__(self):
         return f"<Site {self.name}>"
 
+class User(db.Model):
+    """Represents an authorised QA Café application user."""
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    username = db.Column(
+        db.String(80),
+        unique=True,
+        nullable=False,
+    )
+
+    password_hash = db.Column(
+        db.String(255),
+        nullable=False,
+    )
+
+    role = db.Column(
+        db.String(30),
+        nullable=False,
+    )
+
+    site_id = db.Column(
+        db.Integer,
+        db.ForeignKey("site.id"),
+        nullable=True,
+    )
+
+    site = db.relationship(
+        "Site",
+        backref="users",
+    )
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+    def __repr__(self):
+        return f"<User {self.username}>"
 
 class Employee(db.Model):
     """Represents an employee working at a QA Café site."""
@@ -63,23 +106,74 @@ class Employee(db.Model):
     def __repr__(self):
         return f"<Employee {self.name}>"
 
+def login_required(view_function):
+    """Require a user to be signed in before accessing a route."""
+
+    @wraps(view_function)
+    def wrapped_view(*args, **kwargs):
+        if "user_id" not in session:
+            flash("Please log in to access that page.", "error")
+            return redirect(url_for("login"))
+
+        return view_function(*args, **kwargs)
+
+    return wrapped_view
 
 @app.route("/")
 def home():
     return render_template("home.html")
 
 
-@app.route("/login")
+@app.route("/login", methods=["GET", "POST"])
 def login():
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+
+        user = db.session.execute(
+            db.select(User).where(
+                User.username == username
+            )
+        ).scalars().first()
+
+        if user is None or not user.check_password(password):
+            flash("Invalid username or password.", "error")
+            return render_template("login.html")
+
+        session.clear()
+        session["user_id"] = user.id
+        session["username"] = user.username
+        session["role"] = user.role
+        session["site_id"] = user.site_id
+
+        flash(
+            f"Welcome, {user.username}.",
+            "success",
+        )
+
+        return redirect(url_for("employees"))
+
     return render_template("login.html")
 
+@app.route("/logout")
+def logout():
+    session.clear()
+    flash("You have been logged out.", "success")
+    return redirect(url_for("login"))
 
 @app.route("/employees")
+@login_required
 def employees():
-    # Read all employee records from the database.
-    employee_records = db.session.execute(
-        db.select(Employee).order_by(Employee.name)
-    ).scalars().all()
+    if session.get("role") == "Admin":
+        employee_records = db.session.execute(
+            db.select(Employee).order_by(Employee.name)
+        ).scalars().all()
+    else:
+        employee_records = db.session.execute(
+            db.select(Employee)
+            .where(Employee.site_id == session.get("site_id"))
+            .order_by(Employee.name)
+        ).scalars().all()
 
     return render_template(
         "employees.html",
@@ -87,11 +181,18 @@ def employees():
     )
 
 @app.route("/employees/add", methods=["GET", "POST"])
+@login_required
 def add_employee():
-    sites = db.session.execute(
-        db.select(Site).order_by(Site.name)
-    ).scalars().all()
-
+    if session.get("role") == "Admin":
+        sites = db.session.execute(
+            db.select(Site).order_by(Site.name)
+        ).scalars().all()
+    else:
+        sites = db.session.execute(
+            db.select(Site).where(
+                Site.id == session.get("site_id")
+            )
+        ).scalars().all()
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         start_date_text = request.form.get("start_date", "").strip()
@@ -175,15 +276,33 @@ def add_employee():
     )
 
 @app.route("/employees/<int:employee_id>/edit", methods=["GET", "POST"])
+@login_required
 def edit_employee(employee_id):
     employee = db.session.get(Employee, employee_id)
 
     if employee is None:
         return "Employee not found", 404
 
-    sites = db.session.execute(
-        db.select(Site).order_by(Site.name)
-    ).scalars().all()
+    if (
+        session.get("role") != "Admin"
+        and employee.site_id != session.get("site_id")
+    ):
+        flash(
+            "You are not authorised to edit that employee.",
+            "error",
+        )
+        return redirect(url_for("employees"))
+
+    if session.get("role") == "Admin":
+        sites = db.session.execute(
+            db.select(Site).order_by(Site.name)
+        ).scalars().all()
+    else:
+        sites = db.session.execute(
+            db.select(Site).where(
+                Site.id == session.get("site_id")
+            )
+        ).scalars().all()
 
     if request.method == "POST":
         name = request.form.get("name", "").strip()
@@ -266,11 +385,22 @@ def edit_employee(employee_id):
         sites=sites,
     )
 @app.route("/employees/<int:employee_id>/delete", methods=["POST"])
+@login_required
 def delete_employee(employee_id):
     employee = db.session.get(Employee, employee_id)
 
     if employee is None:
         return "Employee not found", 404
+
+    if (
+        session.get("role") != "Admin"
+        and employee.site_id != session.get("site_id")
+    ):
+        flash(
+            "You are not authorised to delete that employee.",
+            "error",
+        )
+        return redirect(url_for("employees"))
 
     employee_name = employee.name
 
@@ -366,11 +496,61 @@ def seed_database():
     db.session.add_all(employees_to_add)
     db.session.commit()
 
+def seed_users():
+    """Create fictional application users if none exist."""
+
+    existing_user = db.session.execute(
+        db.select(User)
+    ).scalars().first()
+
+    if existing_user is not None:
+        return
+
+    manchester = db.session.execute(
+        db.select(Site).where(
+            Site.name == "Manchester Mainline"
+        )
+    ).scalars().first()
+
+    liverpool = db.session.execute(
+        db.select(Site).where(
+            Site.name == "Liverpool Franchise"
+        )
+    ).scalars().first()
+
+    admin = User(
+        username="admin",
+        role="Admin",
+        site_id=None,
+    )
+    admin.set_password("Admin123!")
+
+    manchester_manager = User(
+        username="manchester_manager",
+        role="Site Manager",
+        site_id=manchester.id,
+    )
+    manchester_manager.set_password("Manager123!")
+
+    liverpool_manager = User(
+        username="liverpool_manager",
+        role="Site Manager",
+        site_id=liverpool.id,
+    )
+    liverpool_manager.set_password("Manager123!")
+
+    db.session.add_all([
+        admin,
+        manchester_manager,
+        liverpool_manager,
+    ])
+
+    db.session.commit()
 
 if __name__ == "__main__":
-    # Database operations outside a route need an application context.
     with app.app_context():
         db.create_all()
         seed_database()
+        seed_users()
 
     app.run(debug=True)
