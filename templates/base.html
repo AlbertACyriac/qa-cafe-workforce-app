@@ -8,18 +8,41 @@
 <body>
 
     <header>
-        <h1>QA Café Workforce Management</h1>
-        <nav>
-            <a href="{{ url_for('home') }}">Home</a>
-            <a href="{{ url_for('login') }}">Login</a>
+    <h1>QA Café Workforce Management</h1>
+
+    <nav>
+        <a href="{{ url_for('home') }}">Home</a>
+
+        {% if session.get("user_id") %}
             <a href="{{ url_for('employees') }}">Employees</a>
-        </nav>
-    </header>
+
+            <span>
+                Signed in as {{ session.get("username") }}
+                ({{ session.get("role") }})
+            </span>
+
+            <a href="{{ url_for('logout') }}">Logout</a>
+        {% else %}
+            <a href="{{ url_for('login') }}">Login</a>
+        {% endif %}
+    </nav>
+</header>
 
     <main>
-        {% block content %}
-        {% endblock %}
-    </main>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <section class="flash-messages">
+                {% for category, message in messages %}
+                    <p class="flash {{ category }}">
+                        {{ message }}
+                    </p>
+                {% endfor %}
+            </section>
+        {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+</main>
 
 </body>
 </html>

@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-header">
+    <h2>Add Employee</h2>
+    <p>Add a fictional employee to the QA Café workforce database.</p>
+</section>
+
+<form method="POST">
+    <div>
+        <label for="name">Full Name</label>
+        <input
+            type="text"
+            id="name"
+            name="name"
+            maxlength="100"
+           
+        >
+    </div>
+
+    <div>
+        <label for="start_date">Start Date</label>
+        <input
+            type="date"
+            id="start_date"
+            name="start_date"
+            
+        >
+    </div>
+
+    <div>
+        <label for="job_role">Job Role</label>
+        <input
+            type="text"
+            id="job_role"
+            name="job_role"
+            maxlength="100"
+            
+        >
+    </div>
+
+    <div>
+        <label for="holiday_allowance">Holiday Allowance</label>
+        <input
+            type="number"
+            id="holiday_allowance"
+            name="holiday_allowance"
+            value="25"
+            
+        >
+    </div>
+
+    <div>
+        <label for="site_id">Site</label>
+        <select id="site_id" name="site_id" required>
+            <option value="">Select a site</option>
+
+            {% for site in sites %}
+            <option value="{{ site.id }}">
+                {{ site.name }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <button type="submit">Add Employee</button>
+
+    <a href="{{ url_for('employees') }}">
+        Cancel
+    </a>
+</form>
+{% endblock %}
