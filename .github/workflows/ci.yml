@@ -56,7 +56,7 @@ jobs:
             -x ".pytest_cache/*"
 
       - name: Upload packaged application
-        uses: actions/upload-artifact@v4
+        uses: uses: actions/upload-artifact@v6
         with:
           name: qa-cafe-workforce-application
           path: qa-cafe-workforce-app.zip
