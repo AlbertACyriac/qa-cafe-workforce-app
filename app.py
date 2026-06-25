@@ -1,3 +1,4 @@
+import os
 from datetime import date
 from functools import wraps
 
@@ -18,7 +19,10 @@ app = Flask(__name__)
 
 # Secret key used by Flask.
 # This is suitable only for the local university prototype.
-app.config["SECRET_KEY"] = "dev-secret-key"
+app.config["SECRET_KEY"] = os.environ.get(
+    "SECRET_KEY",
+    "local-development-key",
+)
 
 # Configure the SQLite database.
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///workforce.db"
